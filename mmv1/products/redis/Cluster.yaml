@@ -413,13 +413,19 @@ properties:
   - name: 'crossClusterReplicationConfig'
     type: NestedObject
     description: Cross cluster replication config
-    default_from_api: true
     properties:
       - name: 'clusterRole'
         type: Enum
         description: |
-          The role of the cluster in cross cluster replication.
-        default_from_api: true
+          The role of the cluster in cross cluster replication. Supported values are:
+
+          CLUSTER_ROLE_UNSPECIFIED: This is an independent cluster that has never participated in cross cluster replication. It allows both reads and writes.
+
+          NONE: This is an independent cluster that previously participated in cross cluster replication(either as a PRIMARY or SECONDARY cluster). It allows both reads and writes.
+
+          PRIMARY: This cluster serves as the replication source for secondary clusters that are replicating from it. Any data written to it is automatically replicated to its secondary clusters. It allows both reads and writes.
+
+          SECONDARY: This cluster replicates data from the primary cluster. It allows only reads.
         enum_values:
           - 'CLUSTER_ROLE_UNSPECIFIED'
           - 'NONE'
@@ -428,7 +434,7 @@ properties:
       - name: 'primaryCluster'
         type: NestedObject
         description: |
-          Details of the primary cluster that is used as the replication source for this secondary cluster. This will be set only for clusters whose cluster role is of type SECONDARY.
+          Details of the primary cluster that is used as the replication source for this secondary cluster. This is allowed to be set only for clusters whose cluster role is of type SECONDARY.
         properties:
           - name: 'cluster'
             type: String
@@ -442,7 +448,7 @@ properties:
       - name: 'secondaryClusters'
         type: Array
         description: |
-          List of secondary clusters that are replicating from this primary cluster. This will be set only for clusters whose cluster role is of type PRIMARY.
+          List of secondary clusters that are replicating from this primary cluster. This is allowed to be set only for clusters whose cluster role is of type PRIMARY.
         item_type:
           type: NestedObject
           properties:
@@ -454,12 +460,11 @@ properties:
               type: String
               description: |
                 The unique id of the secondary cluster.
-              output: true         
-        default_from_api: true
+              output: true
       - name: 'membership'
         type: NestedObject
         description: |
-          An output only view of all the member clusters participating in the cross cluster replication.
+          An output only view of all the member clusters participating in cross cluster replication. This field is populated for all the member clusters irrespective of their cluster role.
         output: true
         properties:
           - name: 'primaryCluster'
