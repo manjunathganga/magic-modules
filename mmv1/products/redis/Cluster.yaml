@@ -271,7 +271,6 @@ properties:
     type: Integer
     description: |
       Required. Number of shards for the Redis cluster.
-    required: true
   - name: 'deletionProtectionEnabled'
     type: Boolean
     description: |
@@ -404,4 +403,88 @@ properties:
           can not go beyond, including reschedule.
           A timestamp in RFC3339 UTC "Zulu" format, with nanosecond
           resolution and up to nine fractional digits.
+        output: true
+  - name: 'crossClusterReplicationConfig'
+    type: NestedObject
+    description: Cross cluster replication config
+    properties:
+      - name: 'clusterRole'
+        type: Enum
+        description: |
+          The role of the cluster in cross cluster replication.
+        default_from_api: true
+        enum_values:
+          - 'CLUSTER_ROLE_UNSPECIFIED'
+          - 'NONE'
+          - 'PRIMARY'
+          - 'SECONDARY'
+      - name: 'primaryCluster'
+        type: NestedObject
+        description: |
+          Details of the primary cluster that is used as the replication source for this secondary cluster. This will be set only for clusters whose cluster role is of type SECONDARY.
+        properties:
+          - name: 'cluster'
+            type: String
+            description: |
+              The full resource path of the primary cluster in the format: projects/<project>/locations/<region>/clusters/<cluster-id>
+          - name: 'uid'
+            type: String
+            description: |
+              The unique id of the primary cluster.
+            output: true
+      - name: 'secondaryClusters'
+        type: Array
+        description: |
+          List of secondary clusters that are replicating from this primary cluster. This will be set only for clusters whose cluster role is of type PRIMARY.
+        item_type:
+          type: NestedObject
+          properties:
+            - name: 'cluster'
+              type: String
+              description: |
+                The full resource path of the secondary cluster in the format: projects/<project>/locations/<region>/clusters/<cluster-id>
+            - name: 'uid'
+              type: String
+              description: |
+                The unique id of the secondary cluster.
+              output: true         
+        default_from_api: true
+      - name: 'membership'
+        type: NestedObject
+        description: |
+          An output only view of all the member clusters participating in the cross cluster replication.
+        output: true
+        properties:
+          - name: 'primaryCluster'
+            type: NestedObject
+            description: |
+              Details of the primary cluster that is used as the replication source for all the secondary clusters.
+            properties:
+              - name: 'cluster'
+                type: String
+                description: |
+                  The full resource path of the primary cluster in the format: projects/<project>/locations/<region>/clusters/<cluster-id>
+              - name: 'uid'
+                type: String
+                description: |
+                  The unique id of the primary cluster.
+          - name: 'secondaryClusters'
+            type: Array
+            description: |
+              List of secondary clusters that are replicating from the primary cluster.
+            item_type:
+              type: NestedObject
+              properties:
+                - name: 'cluster'
+                  type: String
+                  description: |
+                    The full resource path of the secondary cluster in the format: projects/<project>/locations/<region>/clusters/<cluster-id>
+                - name: 'uid'
+                  type: String
+                  description: |
+                    The unique id of the secondary cluster.
+      - name: 'updateTime'
+        type: String
+        description: |
+          The last time cross cluster replication config was updated.
         output: true
