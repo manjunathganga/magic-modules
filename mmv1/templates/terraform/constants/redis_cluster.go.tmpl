@@ -1,0 +1,85 @@
+
+// Is the new redis version less than the old one?
+func secondaryClusterDiffSuppress(k, old, new string, d *schema.ResourceData) bool {
+	log.Printf("[ERROR]************ K: %v, old: %v, new: %v, d: %+v *************", k, old, new, d)
+	return true
+}
+
+func crossClusterReplicationConfigDiffSuppress(k, old, new string, d *schema.ResourceData) bool {
+	log.Printf("K: %v, old: %v, new: %v, d: %+v", k, old, new, d)
+	return false
+}
+
+func crossClusterReplicationCustomDiff(_ context.Context, diff *schema.ResourceDiff, v interface{}) error {
+	log.Printf("[ERROR] +++++++ diff: %+v ++++++++++++", diff)
+
+	ccrConfig, ok := diff.GetOk("cross_cluster_replication_config")
+	// If it is a non CCR cluster, don't suppress the diff
+	if !ok {
+		log.Printf("[ERROR] +++++++ Cluster does NOT have CCR config ++++++++++++")
+		return nil
+	}
+	ccrConfig = ccrConfig.([]interface{})[0]
+	log.Printf("[ERROR] +++++++ Cluster HAS CCR config, type: %T ++++++++++++", ccrConfig)
+
+	clusterRole := ccrConfig.(map[string]interface{})["cluster_role"]
+	log.Printf("[ERROR] +++++++ clusterRole:%v ++++++++++++", clusterRole)
+
+	// If it is not a SECONDARY cluster, don't suppress the diff
+	if clusterRole != "SECONDARY" {
+		log.Printf("[ERROR] +++++++ NOT a secondary cluster ++++++++++++", clusterRole)
+		return nil
+	}
+
+	fieldDiffsToIgnoreForSecondaryCluster := []string {
+		"shard_count",
+		"deletion_protection_enabled",
+		"redis_configs",
+		"authorization_mode",
+		"transit_encryption_mode",
+		"node_type",
+	}
+
+	for _, f := range fieldDiffsToIgnoreForSecondaryCluster {
+		if diff.HasChange(f) {
+			old, new := diff.GetChange(f)
+			log.Printf("[ERROR] +++++++ Detected diff for %v, old: %v, new: %v ++++++++++++", f, old, new)
+			diff.Clear(f)
+		}
+	}
+
+	// Replica count is copied from primary to secondary cluster if an override is not provided during
+	// secondary cluster creation.
+	// Replica count can also be updated after creation on a secondary cluster, so it should be allowed.
+	//
+	// However, there is a special case of updating replica count to zero that needs to be handled. 
+	// As the default value of replica count is zero, the terraform plan will show a diff from non-zero -> zero
+	// if the secondary was created with a non-zero replica count by copying it from primary.
+	// For this reason, we have to check that the value of zero was explicitly provided in the terraform configuration file 
+	// to allow that update on the secondary.    
+	if diff.HasChange("replica_count") {
+		replicaCount := diff.GetRawConfig().GetAttr("replica_count")
+		log.Printf("[ERROR] +++++++ replicaCount IsNull: %v ++++++++++++", replicaCount.IsNull())
+		if replicaCount.IsNull() {
+			old, new := diff.GetChange("replica_count")
+			log.Printf("[ERROR] +++++++ old: %v, new:%v ++++++++++++", old, new) 
+			if new == 0 {
+				log.Printf("[ERROR] +++++++ Setting replica_count to zero ++++++++++++")
+				if err := diff.Clear("replica_count"); err != nil {
+					log.Printf("[ERROR] +++++++ errrrrrrrrrr: %v ++++++++++++", err)
+					// return err
+				}
+			}
+		}
+	} else {
+		log.Printf("[ERROR] +++++++ No change for replica count ++++++++++++") 
+	}
+
+
+	if diff.HasChange("cross_cluster_replication_config") {
+		old, new := diff.GetChange("cross_cluster_replication_config")
+		log.Printf("[ERROR] +++++++ cross_cluster_replication_config diff: old: %+v, new:%+v ++++++++++++", old, new) 
+	}
+
+	return nil
+}
