@@ -63,6 +63,26 @@ examples:
       'deletion_protection_enabled': 'false'
     oics_vars_overrides:
       'deletion_protection_enabled': 'false'
+  - name: 'redis_cluster_secondary'
+    primary_resource_id: 'secondary_cluster'
+    vars:
+      primary_cluster_name: 'my-primary-cluster'
+      primary_cluster_region: 'us-east1'
+      primary_cluster_deletion_protection_enabled: 'true'
+      primary_cluster_policy_name: 'mypolicy-primary-cluster'
+      primary_cluster_subnet_name: 'mysubnet-primary-cluster'
+      secondary_cluster_name: 'my-secondary-cluster'
+      secondary_cluster_region: 'us-east1'
+      secondary_cluster_deletion_protection_enabled: 'true'
+      secondary_cluster_policy_name: 'mypolicy-secondary-cluster'
+      secondary_cluster_subnet_name: 'mysubnet-secondary-cluster'
+      network_name: 'mynetwork'
+    test_vars_overrides:
+      'primary_cluster_deletion_protection_enabled': 'false'
+      'secondary_cluster_deletion_protection_enabled': 'false'
+    oics_vars_overrides:
+      'primary_cluster_deletion_protection_enabled': 'false'
+      'secondary_cluster_deletion_protection_enabled': 'false'
 parameters:
   - name: 'name'
     type: String
