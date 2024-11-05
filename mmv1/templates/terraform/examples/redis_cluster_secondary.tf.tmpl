@@ -1,5 +1,6 @@
+// Create primary cluster
 resource "google_redis_cluster" "primary" {
-  name          = "tf-prim-10"
+  name          = ""
   region        = "us-east1"
   psc_configs {
     network = "projects/manjunathganga-test/global/networks/default"
