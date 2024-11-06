@@ -1,7 +1,7 @@
 // Primary cluster
 resource "google_redis_cluster" "primary_cluster" {
   name          = "{{index $.Vars "primary_cluster_name"}}"
-  region        = "{{index $.Vars "primary_cluster_region"}}"
+  region        = "us-east1"
 
   // Settings that should match on primary and secondary clusters. 
   // If you define a setting here, ensure that the secondary clusters also define it with the same values. 
@@ -13,6 +13,9 @@ resource "google_redis_cluster" "primary_cluster" {
     maxmemory-policy = "volatile-ttl"
   }
   node_type = "REDIS_HIGHMEM_MEDIUM"
+  zone_distribution_config {
+    mode = "MULTI_ZONE"
+  }
 
   // Setting that can be different on primary and secondary clusters.
   // Please see https://cloud.google.com/memorystore/docs/cluster/about-cross-region-replication#override_allowed_during_instance_creation for the complete list of such settings.
@@ -42,7 +45,8 @@ resource "google_redis_cluster" "primary_cluster" {
 // Secondary cluster
 resource "google_redis_cluster" "{{$.PrimaryResourceId}}" {
   name          = "{{index $.Vars "secondary_cluster_name"}}"
-  region        = "{{index $.Vars "secondary_cluster_region"}}"
+  // TODO: Replace this with a different region
+  region        = "us-east1"
 
   // Settings that should match on primary and secondary clusters. 
   // If you define a setting here for primary, ensure the secondary clusters also define it with the same values. 
@@ -54,6 +58,9 @@ resource "google_redis_cluster" "{{$.PrimaryResourceId}}" {
     maxmemory-policy = "volatile-ttl"
   }
   node_type = "REDIS_HIGHMEM_MEDIUM"
+  zone_distribution_config {
+    mode = "MULTI_ZONE"
+  }
 
   // Setting that can be different on primary and secondary clusters.
   // Please see https://cloud.google.com/memorystore/docs/cluster/about-cross-region-replication#override_allowed_during_instance_creation for the complete list of such settings.
@@ -74,6 +81,14 @@ resource "google_redis_cluster" "{{$.PrimaryResourceId}}" {
   }
   deletion_protection_enabled = {{index $.Vars "secondary_cluster_deletion_protection_enabled"}}
 
+  // Cross cluster replication config
+  cross_cluster_replication_config {
+    cluster_role = "SECONDARY"
+    primary_cluster {
+      cluster = google_redis_cluster.primary_cluster.id
+    }
+  }
+
   depends_on = [
     google_network_connectivity_service_connection_policy.secondary_cluster_scp
   ]
@@ -81,8 +96,9 @@ resource "google_redis_cluster" "{{$.PrimaryResourceId}}" {
 
 resource "google_network_connectivity_service_connection_policy" "primary_cluster_scp" {
   name = "{{index $.Vars "primary_cluster_policy_name"}}"
-  location = "{{index $.Vars "primary_cluster_region"}}"
-  service_class = "gcp-memorystore-redis"
+  location = "us-east1"
+  # service_class = "gcp-memorystore-redis"
+  service_class = "gcp-memorystore-redis-autopush"
   description   = "Primary cluster service connection policy"
   network = google_compute_network.producer_net.id
   psc_config {
@@ -92,16 +108,18 @@ resource "google_network_connectivity_service_connection_policy" "primary_cluste
 
 resource "google_compute_subnetwork" "primary_cluster_producer_subnet" {
   name          = "{{index $.Vars "primary_cluster_subnet_name"}}"
-  ip_cidr_range = "10.0.0.247/29"
-  region        = "{{index $.Vars "primary_cluster_region"}}"
+  # ip_cidr_range = "10.0.12.0/29"
+  ip_cidr_range = "10.12.0.0/20"
+  region        = "us-east1"
   network       = google_compute_network.producer_net.id
 }
 
 
 resource "google_network_connectivity_service_connection_policy" "secondary_cluster_scp" {
   name = "{{index $.Vars "secondary_cluster_policy_name"}}"
-  location = "{{index $.Vars "secondary_cluster_region"}}"
-  service_class = "gcp-memorystore-redis"
+  location = "us-east1"
+  # service_class = "gcp-memorystore-redis"
+  service_class = "gcp-memorystore-redis-autopush"
   description   = "Secondary cluster service connection policy"
   network = google_compute_network.producer_net.id
   psc_config {
@@ -111,8 +129,9 @@ resource "google_network_connectivity_service_connection_policy" "secondary_clus
 
 resource "google_compute_subnetwork" "secondary_cluster_producer_subnet" {
   name          = "{{index $.Vars "secondary_cluster_subnet_name"}}"
-  ip_cidr_range = "10.0.0.248/29"
-  region        = "{{index $.Vars "secondary_cluster_region"}}"
+  # ip_cidr_range = "10.0.13.0/29"
+  ip_cidr_range = "10.13.0.0/20"
+  region        = "us-east1"
   network       = google_compute_network.producer_net.id
 }
 

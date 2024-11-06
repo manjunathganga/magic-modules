@@ -67,12 +67,10 @@ examples:
     primary_resource_id: 'secondary_cluster'
     vars:
       primary_cluster_name: 'my-primary-cluster'
-      primary_cluster_region: 'us-east1'
       primary_cluster_deletion_protection_enabled: 'true'
       primary_cluster_policy_name: 'mypolicy-primary-cluster'
       primary_cluster_subnet_name: 'mysubnet-primary-cluster'
       secondary_cluster_name: 'my-secondary-cluster'
-      secondary_cluster_region: 'us-east1'
       secondary_cluster_deletion_protection_enabled: 'true'
       secondary_cluster_policy_name: 'mypolicy-secondary-cluster'
       secondary_cluster_subnet_name: 'mysubnet-secondary-cluster'
