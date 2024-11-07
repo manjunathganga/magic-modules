@@ -45,8 +45,7 @@ resource "google_redis_cluster" "primary_cluster" {
 // Secondary cluster
 resource "google_redis_cluster" "{{$.PrimaryResourceId}}" {
   name          = "{{index $.Vars "secondary_cluster_name"}}"
-  // TODO: Replace this with a different region
-  region        = "us-east1"
+  region        = "europe-west1"
 
   // Settings that should match on primary and secondary clusters. 
   // If you define a setting here for primary, ensure the secondary clusters also define it with the same values. 
@@ -109,6 +108,7 @@ resource "google_redis_cluster" "{{$.PrimaryResourceId}}" {
 
 # resource "google_compute_subnetwork" "primary_cluster_producer_subnet" {
 #   name          = "{{index $.Vars "primary_cluster_subnet_name"}}"
+#   REPLACEEEEEE
 #   # ip_cidr_range = "10.0.12.0/29"
 #   ip_cidr_range = "10.12.0.0/20"
 #   region        = "us-east1"
@@ -118,7 +118,7 @@ resource "google_redis_cluster" "{{$.PrimaryResourceId}}" {
 
 # resource "google_network_connectivity_service_connection_policy" "secondary_cluster_scp" {
 #   name = "{{index $.Vars "secondary_cluster_policy_name"}}"
-#   location = "us-east1"
+#   location = "europe-west1"
 #   # service_class = "gcp-memorystore-redis"
 #   service_class = "gcp-memorystore-redis-autopush"
 #   description   = "Secondary cluster service connection policy"
@@ -130,6 +130,7 @@ resource "google_redis_cluster" "{{$.PrimaryResourceId}}" {
 
 # resource "google_compute_subnetwork" "secondary_cluster_producer_subnet" {
 #   name          = "{{index $.Vars "secondary_cluster_subnet_name"}}"
+#   REPLACEEEEEE
 #   # ip_cidr_range = "10.0.13.0/29"
 #   ip_cidr_range = "10.13.0.0/20"
 #   region        = "us-east1"
