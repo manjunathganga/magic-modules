@@ -260,6 +260,46 @@ func TestAccRedisCluster_createUpdateDeletionProtection(t *testing.T) {
 	})
 }
 
+// Validate that deletion protection enabled/disabled cluster is created updated 
+func TestAccRedisCluster_switchoverAndDetachSecondaru(t *testing.T) {
+	t.Parallel()
+
+	name := fmt.Sprintf("tf-test-%d", acctest.RandInt(t))
+
+	acctest.VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderBetaFactories(t),
+		CheckDestroy:             testAccCheckRedisClusterDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				// create primary cluster
+        		Config: createOrUpdateRedisCluster(&ClusterParams{name: name, replicaCount: 0, shardCount: 3, deletionProtectionEnabled: false, zoneDistributionMode: "MULTI_ZONE"}),
+			},
+			{
+				ResourceName:            "google_redis_cluster.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"psc_configs"},
+			},
+			{
+				// update deletion protection to true
+        		Config: createOrUpdateRedisCluster(&ClusterParams{name: name, replicaCount: 0, shardCount: 3, deletionProtectionEnabled: true, zoneDistributionMode: "MULTI_ZONE"}),
+			},
+			{
+				ResourceName:            "google_redis_cluster.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"psc_configs"},
+			},
+			{
+				// update deletion protection to false and delete the cluster
+        		Config: createOrUpdateRedisCluster(&ClusterParams{name: name, replicaCount: 0, shardCount: 3, deletionProtectionEnabled: false, zoneDistributionMode: "MULTI_ZONE"}),
+			},
+
+		},
+	})
+}
+
 type ClusterParams struct {
 	name                 string
 	replicaCount   			 int
@@ -274,6 +314,10 @@ type ClusterParams struct {
 	maintenanceMinutes   int
 	maintenanceSeconds	 int
 	maintenanceNanos     int
+	isSecondary bool
+	ccrRole string
+	ccrPrimaryCluster string
+	ccrSecondaryClusters []string
 }
 
 func createOrUpdateRedisCluster(params *ClusterParams) string {
@@ -309,8 +353,40 @@ func createOrUpdateRedisCluster(params *ClusterParams) string {
 		`, params.maintenanceDay, params.maintenanceHours, params.maintenanceMinutes, params.maintenanceSeconds, params.maintenanceNanos)
 	}
 
+	secondaryClusterResourceBlock := ``
+	if params.isSecondary {
+		primaryClusterBlock := ``
+		secondaryClustersBlock := ``
+		if params.ccrRole == "SECONDARY" {
+			primaryClusterBlock = fmt.Sprintf(`
+			primary_cluster {
+				cluster = "%s"
+			}
+			`, params.ccrPrimaryCluster)
+		} else if params.ccrRole == "PRIMARY" {
+			for _, sc := range params.ccrSecondaryClusters {
+				secondaryClustersBlock = secondaryClustersBlock + fmt.Sprintf(`
+				secondary_clusters {
+					cluster = "%s"
+				}
+				`, sc)
+			}
+		}
+		secondaryClusterResourceBlock = fmt.Sprintf(`
+		cross_cluster_replication_config {
+			cluster_role = "%s"
+			%s
+			%s
+		}
+		`, params.ccrRole, primaryClusterBlock, secondaryClustersBlock)
+	}
+
+	tfClusterResourceName := "test"
+	if params.isSecondary {
+		tfClusterResourceName := "test_secondary"
+	}
 	return fmt.Sprintf(`
-resource "google_redis_cluster" "test" {
+resource "google_redis_cluster" "%s" {
 	provider = google-beta
 	name           = "%s"
 	replica_count = %d
@@ -324,6 +400,7 @@ resource "google_redis_cluster" "test" {
 	redis_configs = {
 		%s
 	}
+  %s
   %s
   %s
 	depends_on = [
@@ -356,7 +433,9 @@ resource "google_compute_network" "producer_net" {
 	name                    = "%s"
 	auto_create_subnetworks = false
 }
-`, params.name, params.replicaCount, params.shardCount, params.nodeType, params.deletionProtectionEnabled, strBuilder.String(), zoneDistributionConfigBlock, maintenancePolicyBlock, params.name, params.name, params.name)
+`, tfClusterResourceName, params.name, params.replicaCount, params.shardCount, params.nodeType, params.deletionProtectionEnabled, strBuilder.String(), zoneDistributionConfigBlock, maintenancePolicyBlock, secondaryClusterResourceBlock, params.name, params.name, params.name)
 }
+
+func createClusterResource()
 
 {{ end }}
