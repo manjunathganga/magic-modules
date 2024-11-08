@@ -2,6 +2,9 @@
 resource "google_redis_cluster" "primary_cluster" {
   name          = "{{index $.Vars "primary_cluster_name"}}"
   region        = "us-east1"
+  psc_configs {
+    network = "projects/manjunathganga-test/global/networks/default"
+  }
 
   // Settings that should match on primary and secondary clusters. 
   // If you define a setting here, ensure that the secondary clusters also define it with the same values. 
@@ -14,11 +17,8 @@ resource "google_redis_cluster" "primary_cluster" {
   }
   node_type = "REDIS_HIGHMEM_MEDIUM"
 
-  // Setting that can be different on primary and secondary clusters.
+  // Settings that can have different values on primary and secondary clusters.
   // Please see https://cloud.google.com/memorystore/docs/cluster/about-cross-region-replication#override_allowed_during_instance_creation for the complete list of such settings.
-  psc_configs {
-    network = "projects/manjunathganga-test/global/networks/default"
-  }
   zone_distribution_config {
     mode = "MULTI_ZONE"
   }
@@ -46,6 +46,9 @@ resource "google_redis_cluster" "primary_cluster" {
 resource "google_redis_cluster" "{{$.PrimaryResourceId}}" {
   name          = "{{index $.Vars "secondary_cluster_name"}}"
   region        = "europe-west1"
+  psc_configs {
+    network = "projects/manjunathganga-test/global/networks/default"
+  }
 
   // Settings that should match on primary and secondary clusters. 
   // If you define a setting here for primary, ensure the secondary clusters also define it with the same values. 
@@ -60,9 +63,6 @@ resource "google_redis_cluster" "{{$.PrimaryResourceId}}" {
 
   // Setting that can be different on primary and secondary clusters.
   // Please see https://cloud.google.com/memorystore/docs/cluster/about-cross-region-replication#override_allowed_during_instance_creation for the complete list of such settings.
-  psc_configs {
-    network = "projects/manjunathganga-test/global/networks/default"
-  }
   zone_distribution_config {
     mode = "MULTI_ZONE"
   }
