@@ -35,7 +35,7 @@ docs:
           1. Execute `terraform apply` to apply the change and wait for it to complete.
       1. Detect configuration drift on the secondary cluster(s):
           1. Refresh the state of the secondary clusters by running `terraform apply -refresh-only --auto-approve`. 
-          1. Executing `terraform plan` on the secondary cluster(s) now should reveal a diff for the modified setting. The proposed value in the Terraform plan should align with the updated value applied to the primary cluster in the preceding step.
+          1. This should reveal a diff for the modified setting. The proposed value in the Terraform plan should align with the updated value applied to the primary cluster in the preceding step.
       1. Reconcile secondary cluster(s) configuration
           1. Manually edit the Terraform configuration file(s) for the secondary cluster(s) to update the setting with the latest value from the state.
           1. Execute `terraform plan` once again. This should not generate any diff indicating the configuration is in sync with the infrastructure.
@@ -50,54 +50,53 @@ docs:
       1. Update the `cross_cluster_replication_config` field of the secondary that needs to become the new primary:
           1. Change `cross_cluster_replication_config.cluster_role` from `SECONDARY` to `PRIMARY`.
           1. Remove `cross_cluster_replication_config.primary_cluster`.
-          1. Set `cross_cluster_replication_config.secondary_clusters` list. This list should include the current primary and other secondary clusters.
+          1. Set `cross_cluster_replication_config.secondary_clusters` list with the new secondaries. This should include the current primary and other secondary clusters.
 
           -> You can refer to the current value of `cross_cluster_replication_config.membership` field to lookup the current primary and secondary clusters.
       1. Execute switchover:
-          1. Run `terraform apply` to apply the change and wait for it to complete.
+          1. Execute`terraform apply` to apply the change and wait for it to complete.
       1. Fix any configuration drifts on the previous primary and other secondary clusters:
           1. Refresh the state of the previous primary and other secondary clusters(if any) by running `terraform apply -refresh-only --auto-approve`.
-          1. Run `terraform plan` on the previous primary and other secondary clusters(if any).
-          1. If any diffs are reported for `cross_cluster_replication_config` field, manually update the configuration file with the latest state.
-          1. Execute `terraform plan` once again. This should not generate any diff indicating the configuration is in sync with the infrastructure.
+          1. Execute `terraform plan`. If any diffs are reported for `cross_cluster_replication_config` field:
+              1. Manually update the configuration file(s) for those clusters with the latest state.
+              1. Execute `terraform plan` once again. This should not generate any diff indicating the configuration is in sync with the infrastructure.
 
     **Detach a secondary cluster**
 
     To [detach](https://cloud.google.com/memorystore/docs/cluster/working-with-cross-region-replication#detach_secondary_clusters_option_1) a secondary cluster, please follow the below steps:
-      1. Ensure that the Terraform configuration file for the secondary cluster that needs to become the new primary has the `cross_cluster_replication_config` field. If it is not present:
+      1. Ensure that the Terraform configuration file for the secondary cluster that needs to be detached has the `cross_cluster_replication_config` field. If it is not present:
           1. Add the `cross_cluster_replication_config` to the configuration file from the latest value in the state.
           1. Execute `terraform plan`. This should not generate any diff indicating the configuration is in sync with the infrastructure.
-              1. Execute `terraform plan`. This should not generate any diff indicating the configuration is in sync with the infrastructure.
       1. Update the `cross_cluster_replication_config` field of the secondary that needs to be detached:
           1. Change `cross_cluster_replication_config.cluster_role` from `SECONDARY` to `NONE`.
           1. Remove `cross_cluster_replication_config.primary_cluster`.
       1. Execute detach:
-          1. Run `terraform apply` to apply the change and wait for it to complete.
+          1. Execute`terraform apply` to apply the change and wait for it to complete.
       1. Fix any configuration drifts on the previous primary:
           1. Refresh the state of the previous primary by running `terraform apply -refresh-only --auto-approve`.
-          1. Run `terraform plan` on the previous primary.
-          1. If any diffs are reported for `cross_cluster_replication_config` field, manually update the configuration file with the latest state.
-          1. Execute `terraform plan` once again. This should not generate any diff indicating the configuration is in sync with the infrastructure.
+          1. Execute `terraform plan`. If any diff is reported for `cross_cluster_replication_config` field:
+              1. Manually update the configuration file with the latest state.
+              1. Execute `terraform plan` once again. This should not generate any diff indicating the configuration is in sync with the infrastructure.
 
-    **Detach a secondary cluster via primary cluster**
+    **Detach secondary cluster(s) via primary cluster**
 
-    To [detach](https://cloud.google.com/memorystore/docs/cluster/working-with-cross-region-replication#detach_secondary_clusters_option_2), please follow the below steps:
+    To [detach](https://cloud.google.com/memorystore/docs/cluster/working-with-cross-region-replication#detach_secondary_clusters_option_2) secondary clusters via primary, please follow the below steps:
       1. Ensure that the Terraform configuration file for the primary cluster from which the secondary has to be detached has the `cross_cluster_replication_config` field. If it is not present:
           1. Add the `cross_cluster_replication_config` to the configuration file from the latest value in the state.
           1. Execute `terraform plan`. This should not generate any diff indicating the configuration is in sync with the infrastructure.
       1. Update the `cross_cluster_replication_config` field of the primary cluster:
-          1. If primary cluster cluster currently has only one secondary: 
+          1. If you are detaching all secondaries from the primary: 
               1. Change `cross_cluster_replication_config.cluster_role` from `PRIMARY` to `NONE`.
               1. Remove `cross_cluster_replication_config.secondary_clusters` field.
-          1. If primary cluster cluster currently has more than one secondary: 
+          1. If you are detaching a specific secondary: 
               1. Update `cross_cluster_replication_config.secondary_clusters` field to remove the secondary cluster that needs to be detached.
       1. Execute detach:
-          1. Run `terraform apply` to apply the change and wait for it to complete.
-      1. Fix any configuration drifts on the secondary cluster that was detached:
-          1. Refresh the state of the secondary cluster that was detached by running `terraform apply -refresh-only --auto-approve`.
-          1. Run `terraform plan` on the detached secondary.
-          1. If any diffs are reported for `cross_cluster_replication_config` field, manually update the configuration file with the latest state.
-          1. Execute `terraform plan` once again. This should not generate any diff indicating the configuration is in sync with the infrastructure.
+          1. Execute `terraform apply` to apply the change and wait for it to complete.
+      1. Fix any configuration drifts on the secondary cluster(s) that was detached:
+          1. Refresh the state of the secondary cluster(s) that were detached by running `terraform apply -refresh-only --auto-approve`.
+          1. Execute `terraform plan`. If any diffs are reported for `cross_cluster_replication_config` field:
+              1. Manually update the configuration file(s) for those clusters with the latest state.
+              1. Execute `terraform plan` once again. This should not generate any diff indicating the configuration is in sync with the infrastructure.
 
 base_url: 'projects/{{project}}/locations/{{region}}/clusters'
 self_link: 'projects/{{project}}/locations/{{region}}/clusters/{{name}}'
