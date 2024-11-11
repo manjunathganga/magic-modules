@@ -273,18 +273,8 @@ func TestAccRedisCluster_switchoverAndDetachSecondary(t *testing.T) {
 		CheckDestroy:             testAccCheckRedisClusterDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
-				// create primary cluster
-        		Config: createOrUpdateRedisCluster(&ClusterParams{name: pcName, replicaCount: 0, shardCount: 3, deletionProtectionEnabled: false, zoneDistributionMode: "MULTI_ZONE"}),
-			},
-			{
-				ResourceName:            "google_redis_cluster.test",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"psc_configs"},
-			},
-			{
-				// create secondary cluster
-        		Config: createOrUpdateRedisCluster(&ClusterParams{name: scName, replicaCount: 0, shardCount: 3, deletionProtectionEnabled: true, zoneDistributionMode: "MULTI_ZONE", ccrRole: "SECONDARY", ccrPrimaryClusterName: pcName}),
+				// create primary and secondary clusters cluster
+				Config: createOrUpdateRedisCluster(&ClusterParams{name: pcName, replicaCount: 0, shardCount: 3, deletionProtectionEnabled: false, zoneDistributionMode: "MULTI_ZONE", shouldCreateSecondary: true, secondaryClusterName: scName, ccrRole: "SECONDARY"}),
 			},
 			{
 				ResourceName:            "google_redis_cluster.test_secondary",
@@ -293,8 +283,8 @@ func TestAccRedisCluster_switchoverAndDetachSecondary(t *testing.T) {
 				ImportStateVerifyIgnore: []string{"psc_configs"},
 			},
 			{
-				// Switchover to secondary cluster
-				Config: createOrUpdateRedisCluster(&ClusterParams{name: scName, replicaCount: 0, shardCount: 3, deletionProtectionEnabled: true, zoneDistributionMode: "MULTI_ZONE", ccrRole: "PRIMARY", ccrPrimaryClusterName: pcName}),
+				// // Switchover to secondary cluster
+				Config: createOrUpdateRedisCluster(&ClusterParams{name: pcName, replicaCount: 0, shardCount: 3, deletionProtectionEnabled: false, zoneDistributionMode: "MULTI_ZONE", shouldCreateSecondary: true, secondaryClusterName: scName, ccrRole: "PRIMARY"}),
 			},
 			{
 				ResourceName:            "google_redis_cluster.test_secondary",
@@ -304,9 +294,8 @@ func TestAccRedisCluster_switchoverAndDetachSecondary(t *testing.T) {
 			},
 			{
 				// Detach secondary cluster and delete the clusters
-				Config: createOrUpdateRedisCluster(&ClusterParams{name: scName, replicaCount: 0, shardCount: 3, deletionProtectionEnabled: true, zoneDistributionMode: "MULTI_ZONE", ccrRole: "NONE"}),
+        		Config: createOrUpdateRedisCluster(&ClusterParams{name: pcName, replicaCount: 0, shardCount: 3, deletionProtectionEnabled: false, zoneDistributionMode: "MULTI_ZONE", shouldCreateSecondary: true, secondaryClusterName: scName, ccrRole: "NONE"}),
 			},
-
 		},
 	})
 }
@@ -326,8 +315,8 @@ type ClusterParams struct {
 	maintenanceSeconds	 int
 	maintenanceNanos     int
 	shouldCreateSecondary bool
+	secondaryClusterName string
 	ccrRole string
-	ccrPrimaryClusterName string
 }
 
 func createOrUpdateRedisCluster(params *ClusterParams) string {
@@ -375,6 +364,8 @@ func createOrUpdateRedisCluster(params *ClusterParams) string {
 
 func createRedisClusterResourceConfig(params *ClusterParams, isSecondaryCluster bool) string {
 	tfClusterResourceName := "test"
+	clusterName := params.name
+	dependsOnBlock := "google_network_connectivity_service_connection_policy.default"
 
 	var strBuilder strings.Builder
 	for key, value := range params.redisConfigs {
@@ -408,38 +399,35 @@ func createRedisClusterResourceConfig(params *ClusterParams, isSecondaryCluster 
 		`, params.maintenanceDay, params.maintenanceHours, params.maintenanceMinutes, params.maintenanceSeconds, params.maintenanceNanos)
 	}
 
-	secondaryClusterResourceBlock := ``
+	crossClusterReplicationConfigBlock := ``
 	if isSecondaryCluster {
-		// Override TF cluster resource name for secondary
 		tfClusterResourceName = "test_secondary"
-		pcResourcePath := fmt.Sprintf("projects/${data.google_project.test_project.project_id}/locations/us-central1/clusters/%v", params.ccrPrimaryClusterName)
+		clusterName = params.secondaryClusterName
+		dependsOnBlock = dependsOnBlock + ", google_redis_cluster.test"
+
+		// Construct cross_cluster_replication_config block
 		pcBlock := ``
 		scsBlock := ``
 		if params.ccrRole == "SECONDARY" {
 			pcBlock = fmt.Sprintf(`
 			primary_cluster {
-				cluster = "%s"
+				cluster = google_redis_cluster.test.id
 			}
-			`, pcResourcePath)
+			`)
 		} else if params.ccrRole == "PRIMARY" {
 			scsBlock = fmt.Sprintf(`
 			secondary_clusters {
-				cluster = "%s"
+				cluster = google_redis_cluster.test.id
 			}
-			`, pcResourcePath)
+			`)
 		}
-		secondaryClusterResourceBlock = fmt.Sprintf(`
+		crossClusterReplicationConfigBlock = fmt.Sprintf(`
 		cross_cluster_replication_config {
 			cluster_role = "%s"
 			%s
 			%s
 		}
 		`, params.ccrRole, pcBlock, scsBlock)
-	}
-
-	dependsOnBlock := `google_network_connectivity_service_connection_policy.default`
-	if isSecondaryCluster {
-		dependsOnBlock = dependsOnBlock + `, google_redis_cluster.test`
 	}
 
 	return fmt.Sprintf(`
@@ -466,7 +454,7 @@ func createRedisClusterResourceConfig(params *ClusterParams, isSecondaryCluster 
 		}
 		`,
 		tfClusterResourceName,
-		params.name,
+		clusterName,
 		params.replicaCount,
 		params.shardCount,
 		params.nodeType,
@@ -474,7 +462,7 @@ func createRedisClusterResourceConfig(params *ClusterParams, isSecondaryCluster 
 		strBuilder.String(),
 		zoneDistributionConfigBlock,
 		maintenancePolicyBlock,
-		secondaryClusterResourceBlock,
+		crossClusterReplicationConfigBlock,
 		dependsOnBlock)
 }
 
