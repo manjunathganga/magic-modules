@@ -293,10 +293,18 @@ func TestAccRedisCluster_switchoverAndDetachSecondary(t *testing.T) {
 				ImportStateVerifyIgnore: []string{"psc_configs"},
 			},
 			{
+				// Switchover to secondary cluster
+				Config: createOrUpdateRedisCluster(&ClusterParams{name: scName, replicaCount: 0, shardCount: 3, deletionProtectionEnabled: true, zoneDistributionMode: "MULTI_ZONE", ccrRole: "PRIMARY", ccrPrimaryClusterName: pcName}),
+			},
+			{
 				ResourceName:            "google_redis_cluster.test_secondary",
 				ImportState:             true,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"psc_configs"},
+			},
+			{
+				// Detach secondary cluster and delete the clusters
+				Config: createOrUpdateRedisCluster(&ClusterParams{name: scName, replicaCount: 0, shardCount: 3, deletionProtectionEnabled: true, zoneDistributionMode: "MULTI_ZONE", ccrRole: "NONE"}),
 			},
 
 		},
@@ -317,11 +325,55 @@ type ClusterParams struct {
 	maintenanceMinutes   int
 	maintenanceSeconds	 int
 	maintenanceNanos     int
+	shouldCreateSecondary bool
 	ccrRole string
 	ccrPrimaryClusterName string
 }
 
 func createOrUpdateRedisCluster(params *ClusterParams) string {
+	clusterResourceBlock := createRedisClusterResourceConfig(params, /*isSecondaryCluster*/false)
+	secClusterResourceBlock := ``
+	if params.shouldCreateSecondary {
+		secClusterResourceBlock = createRedisClusterResourceConfig(params, /*isSecondaryCluster*/true)
+	}
+
+	return fmt.Sprintf(`
+		%s
+		%s
+		resource "google_network_connectivity_service_connection_policy" "default" {
+			provider = google-beta
+			name = "%s"
+			location = "us-central1"
+			service_class = "gcp-memorystore-redis-autopush"
+			description   = "my basic service connection policy"
+			network = google_compute_network.producer_net.id
+			psc_config {
+			subnetworks = [google_compute_subnetwork.producer_subnet.id]
+			}
+		}
+
+		resource "google_compute_subnetwork" "producer_subnet" {
+			provider      = google-beta
+			name          = "%s"
+			ip_cidr_range = "10.0.0.16/28"
+			region        = "us-central1"
+			network       = google_compute_network.producer_net.id
+		}
+
+		resource "google_compute_network" "producer_net" {
+			provider                = google-beta
+			name                    = "%s"
+			auto_create_subnetworks = false
+		}
+		`,
+		clusterResourceBlock,
+		secClusterResourceBlock,
+		params.name,
+		params.name,
+		params.name)
+}
+
+func createRedisClusterResourceConfig(params *ClusterParams, isSecondaryCluster bool) string {
 	tfClusterResourceName := "test"
 
 	var strBuilder strings.Builder
@@ -357,7 +409,7 @@ func createOrUpdateRedisCluster(params *ClusterParams) string {
 	}
 
 	secondaryClusterResourceBlock := ``
-	if params.ccrRole != "" {
+	if isSecondaryCluster {
 		// Override TF cluster resource name for secondary
 		tfClusterResourceName = "test_secondary"
 		pcResourcePath := fmt.Sprintf("projects/${data.google_project.test_project.project_id}/locations/us-central1/clusters/%v", params.ccrPrimaryClusterName)
@@ -385,59 +437,45 @@ func createOrUpdateRedisCluster(params *ClusterParams) string {
 		`, params.ccrRole, pcBlock, scsBlock)
 	}
 
+	dependsOnBlock := `google_network_connectivity_service_connection_policy.default`
+	if isSecondaryCluster {
+		dependsOnBlock = dependsOnBlock + `, google_redis_cluster.test`
+	}
+
 	return fmt.Sprintf(`
-data "google_project" "test_project" {
-	provider = google-beta
-}
-
-resource "google_redis_cluster" "%s" {
-	provider = google-beta
-	name           = "%s"
-	replica_count = %d
-	shard_count = %d
-	node_type = "%s"
-	deletion_protection_enabled = %v
-	region         = "us-central1"
-	psc_configs {
-			network = google_compute_network.producer_net.id
-	}
-	redis_configs = {
+		resource "google_redis_cluster" "%s" {
+		provider = google-beta
+		name           = "%s"
+		replica_count = %d
+		shard_count = %d
+		node_type = "%s"
+		deletion_protection_enabled = %v
+		region         = "us-central1"
+		psc_configs {
+				network = google_compute_network.producer_net.id
+		}
+		redis_configs = {
+			%s
+		}
 		%s
-	}
-  %s
-  %s
-  %s
-	depends_on = [
-          google_network_connectivity_service_connection_policy.default
-        ]
-}
-
-resource "google_network_connectivity_service_connection_policy" "default" {
-	provider = google-beta
-	name = "%s"
-	location = "us-central1"
-	service_class = "gcp-memorystore-redis"
-	description   = "my basic service connection policy"
-	network = google_compute_network.producer_net.id
-	psc_config {
-	subnetworks = [google_compute_subnetwork.producer_subnet.id]
-	}
-}
-
-resource "google_compute_subnetwork" "producer_subnet" {
-	provider      = google-beta
-	name          = "%s"
-	ip_cidr_range = "10.0.0.16/28"
-	region        = "us-central1"
-	network       = google_compute_network.producer_net.id
-}
-
-resource "google_compute_network" "producer_net" {
-	provider                = google-beta
-	name                    = "%s"
-	auto_create_subnetworks = false
-}
-`, tfClusterResourceName, params.name, params.replicaCount, params.shardCount, params.nodeType, params.deletionProtectionEnabled, strBuilder.String(), zoneDistributionConfigBlock, maintenancePolicyBlock, secondaryClusterResourceBlock, params.name, params.name, params.name)
+		%s
+		%s
+		depends_on = [
+				%s
+			]
+		}
+		`,
+		tfClusterResourceName,
+		params.name,
+		params.replicaCount,
+		params.shardCount,
+		params.nodeType,
+		params.deletionProtectionEnabled,
+		strBuilder.String(),
+		zoneDistributionConfigBlock,
+		maintenancePolicyBlock,
+		secondaryClusterResourceBlock,
+		dependsOnBlock)
 }
 
 {{ end }}
